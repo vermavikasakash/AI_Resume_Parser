@@ -10,6 +10,8 @@ const emptyFormData = {
   education: "",
 };
 
+const API_BASE = `${import.meta.env.VITE_API_URL}/api/v1`;
+
 const starterMessages = [
   {
     role: "assistant",
@@ -53,13 +55,10 @@ function App() {
     setError("");
 
     try {
-      const response = await fetch(
-        "http://localhost:5000/api/v1/resume-parse",
-        {
-          method: "POST",
-          body: data,
-        },
-      );
+      const response = await fetch(`${API_BASE}/resume-parse`, {
+        method: "POST",
+        body: data,
+      });
 
       const parsed = await response.json();
 
@@ -109,7 +108,7 @@ function App() {
     setError("");
 
     try {
-      const response = await fetch("http://localhost:5000/api/v1/chat", {
+      const response = await fetch(`${API_BASE}/chat`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
