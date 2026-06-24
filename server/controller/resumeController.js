@@ -1,13 +1,14 @@
 const { PDFParse } = require("pdf-parse");
 const { GoogleGenerativeAI } = require("@google/generative-ai");
 const crypto = require("crypto");
+const redisClient = require("../redis-client.js");
 
 const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({
   model: "gemini-2.5-flash",
 });
 
-const resumeCache = new Map();
+// const resumeCache = new Map();
 
 function buildResumeResponse(fileHash, cachedResume, fromCache = false) {
   return {
@@ -28,15 +29,19 @@ async function parseResumeFn(req, res) {
       });
     }
     // Caching logic
-    const fileHash = crypto.createHash("sha256").update(req.file.buffer).digest("hex");
+    const fileHash = crypto
+      .createHash("sha256")
+      .update(req.file.buffer)
+      .digest("hex");
 
-    const cachedData = resumeCache.get(fileHash);
-
+    // const cachedData = resumeCache.get(fileHash);
+    const cachedData = await redisClient.get(`resume:${fileHash}`);
+    
     if (cachedData) {
       console.log("Cache Hit");
       return res
         .status(200)
-        .json(buildResumeResponse(fileHash, cachedData, true));
+        .json(buildResumeResponse(fileHash, JSON.parse(cachedData), true));
     }
     // Caching logic ends
 
@@ -76,7 +81,11 @@ ${resumeText}
 
     const parsedData = JSON.parse(cleanedResponse);
     const cachedResume = { parsedData, resumeText };
-    resumeCache.set(fileHash, cachedResume);
+    // resumeCache.set(fileHash, cachedResume);
+    // REDIS implementation
+    await redisClient.set(`resume:${fileHash}`, JSON.stringify(cachedResume), {
+      EX: 3600,
+    });
 
     return res.status(200).json(buildResumeResponse(fileHash, cachedResume));
   } catch (error) {
@@ -103,7 +112,8 @@ async function chatFn(req, res) {
       });
     }
 
-    const cachedResume = resumeCache.get(fileHash);
+    // const cachedResume = resumeCache.get(fileHash);
+    const cachedData = await redisClient.get(fileHash);
 
     if (!cachedResume) {
       return res.status(404).json({
@@ -114,7 +124,7 @@ async function chatFn(req, res) {
     const prompt = `
 Resume:
 
-${cachedResume.resumeText}
+${JSON.parse(cachedResume).resumeText}
 
 Question:
 ${message.trim()}
